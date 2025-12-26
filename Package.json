@@ -2,15 +2,9 @@
   "name": "nvidia-openai-proxy",
   "version": "1.0.0",
   "description": "OpenAI to NVIDIA NIM API Proxy",
-  "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "dev": "vercel dev",
+    "deploy": "vercel"
   }
 }
