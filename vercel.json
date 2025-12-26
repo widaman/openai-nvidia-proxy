@@ -1,7 +1,9 @@
 {
-  "version": 2,
   "rewrites": [
+    { "source": "/v1/chat/completions", "destination": "/api/proxy" },
+    { "source": "/v1/models", "destination": "/api/proxy" },
     { "source": "/v1/(.*)", "destination": "/api/proxy" },
-    { "source": "/(.*)", "destination": "/api/proxy" }
+    { "source": "/health", "destination": "/api/proxy" },
+    { "source": "/", "destination": "/api/proxy" }
   ]
 }
