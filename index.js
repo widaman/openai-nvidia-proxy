@@ -4,63 +4,104 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-const NIM_API_KEY = process.env.NIM_API_KEY;
-const NIM_BASE_URL = "https://api.nvidia.com/v1/chat/completions";
-// Example model: meta/llama-3.1-8b-instruct
+/* ===============================
+   ENVIRONMENT VARIABLES
+================================ */
+
+const NIM_API_KEY = process.env.NIM_API_KEY; // nvapi-xxxx
+const NIM_FUNCTION_ID = process.env.NIM_FUNCTION_ID; // REQUIRED
 const DEFAULT_MODEL = process.env.NIM_MODEL || "meta/llama-3.1-8b-instruct";
 
-/**
- * OpenAI-compatible endpoint
- */
+/* ===============================
+   MODEL ALIASING (JANITOR FIX)
+================================ */
+
+const MODEL_MAP = {
+  "gpt-4": DEFAULT_MODEL,
+  "gpt-4o": DEFAULT_MODEL,
+  "gpt-3.5-turbo": DEFAULT_MODEL
+};
+
+/* ===============================
+   NVIDIA NIM (NVCF) ENDPOINT
+================================ */
+
+const NIM_BASE_URL = `https://api.nvcf.nvidia.com/v2/nvcf/pexec/functions/${NIM_FUNCTION_ID}`;
+
+/* ===============================
+   OPENAI-COMPATIBLE ENDPOINT
+================================ */
+
 app.post("/v1/chat/completions", async (req, res) => {
   try {
-    const {
-      messages,
-      model,
-      temperature = 0.7,
-      max_tokens = 1024,
-      stream = false
-    } = req.body;
+    // Janitor ALWAYS sends Authorization – accept but ignore value
+    if (!req.headers.authorization) {
+      return res.status(401).json({
+        error: { message: "Missing Authorization header" }
+      });
+    }
+
+    const body = req.body;
+
+    if (!Array.isArray(body.messages)) {
+      return res.status(400).json({
+        error: { message: "Invalid messages format" }
+      });
+    }
+
+    // Resolve model alias
+    const requestedModel = body.model;
+    const resolvedModel =
+      MODEL_MAP[requestedModel] || requestedModel || DEFAULT_MODEL;
+
+    /* ===============================
+       NVIDIA NIM PAYLOAD FORMAT
+    ================================ */
 
     const nimPayload = {
-      model: model || DEFAULT_MODEL,
-      messages,
-      temperature,
-      max_tokens,
-      stream
+      inputs: [
+        {
+          messages: body.messages
+        }
+      ]
     };
 
     const nimResponse = await fetch(NIM_BASE_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${NIM_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify(nimPayload)
     });
 
     const data = await nimResponse.json();
 
-    // Convert NIM response → OpenAI format
-    const openAIResponse = {
-      id: data.id || "chatcmpl-nim",
+    /* ===============================
+       OPENAI RESPONSE FORMAT
+    ================================ */
+
+    const content =
+      data?.outputs?.[0]?.choices?.[0]?.message?.content ?? "";
+
+    res.json({
+      id: "chatcmpl-nim",
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
-      model: model || DEFAULT_MODEL,
+      model: resolvedModel,
       choices: [
         {
           index: 0,
           message: {
             role: "assistant",
-            content: data.choices?.[0]?.message?.content || ""
+            content
           },
           finish_reason: "stop"
         }
       ],
-      usage: data.usage || {}
-    };
-
-    res.json(openAIResponse);
+      usage: {}
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({
@@ -72,9 +113,17 @@ app.post("/v1/chat/completions", async (req, res) => {
   }
 });
 
+/* ===============================
+   HEALTH CHECK
+================================ */
+
 app.get("/", (_, res) => {
-  res.send("NVIDIA NIM OpenAI-compatible proxy is running.");
+  res.send("NVIDIA NIM → OpenAI proxy running");
 });
+
+/* ===============================
+   SERVER
+================================ */
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
