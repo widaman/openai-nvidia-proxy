@@ -1,9 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/v1/chat/completions", "destination": "/api/proxy" },
-    { "source": "/v1/models", "destination": "/api/proxy" },
-    { "source": "/v1/(.*)", "destination": "/api/proxy" },
-    { "source": "/health", "destination": "/api/proxy" },
-    { "source": "/", "destination": "/api/proxy" }
+  "version": 2,
+  "builds": [
+    { "src": "index.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/index.js" }
   ]
 }
